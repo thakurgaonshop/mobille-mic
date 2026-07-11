@@ -129,7 +129,14 @@
     <div id="pcStatus" class="status wait"><span class="dot"></span> ফোনের সংযোগের অপেক্ষায়...</div>
 
     <button class="btn-green" id="enableAudioBtn">🔊 সাউন্ড চালু করুন (এখানে ক্লিক করুন)</button>
-    <div class="note">ব্রাউজারের নিয়ম অনুযায়ী এই বাটনে একবার ক্লিক করা জরুরি — নাহলে ফোন সংযুক্ত হলেও PC-তে কোনো শব্দ শোনা যাবে না। সংযোগ হওয়ার আগে বা পরে, যেকোনো সময় চাপতে পারেন।</div>
+    <button class="btn-secondary" id="testToneBtn" style="margin-top:8px;">🔈 টেস্ট শব্দ চালান (৪৪০Hz বিপ)</button>
+    <div class="note">শব্দ শোনা না গেলে আগে এই টেস্ট বিপটা চালিয়ে দেখুন — এটা ফোন ছাড়াই সরাসরি স্পিকার টেস্ট করে। বিপও না শোনা গেলে সমস্যা PC-র স্পিকার/ভলিউম সেটিংসে, ফোনের সংযোগে না।</div>
+
+    <div class="field" style="margin-top:14px;">
+      <label>🎚️ ইনকামিং অডিও লেভেল (ফোন থেকে সত্যিই অডিও আসছে কিনা)</label>
+      <div class="level-meter"><div class="level-fill" id="pcLevelFill"></div></div>
+      <div class="note">ফোনে কথা বললে এই বারটা নড়া উচিত। না নড়লে সমস্যা সংযোগে; নড়লে কিন্তু শব্দ না শোনা গেলে সমস্যা স্পিকার/আউটপুট ডিভাইসে।</div>
+    </div>
 
     <div id="pcControls" style="display:none;">
       <hr class="sep">
@@ -260,6 +267,24 @@ function initPC(){
     micAudioEl.play().catch(err=> console.warn('mic play blocked:', err));
   });
 
+  document.getElementById('testToneBtn').addEventListener('click', ()=>{
+    ensureAudioCtx();
+    if(audioCtx.state === 'suspended') audioCtx.resume();
+    if(!speakerDest){
+      speakerDest = audioCtx.createMediaStreamDestination();
+      speakerAudioEl.srcObject = speakerDest.stream;
+      speakerAudioEl.play().catch(err=> console.warn('speaker play blocked:', err));
+    }
+    const osc = audioCtx.createOscillator();
+    const toneGain = audioCtx.createGain();
+    toneGain.gain.value = 0.35;
+    osc.frequency.value = 440;
+    osc.connect(toneGain).connect(speakerDest);
+    if(speakerGainNode) osc.connect(speakerGainNode); // also confirm it reaches the same path as phone audio, in case dest was recreated later
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.6);
+  });
+
   peer.on('call', call=>{
     call.answer(); // we don't send audio back, just receive
     call.on('stream', remoteStream=>{
@@ -290,6 +315,20 @@ function initPC(){
 
     sourceNode.connect(speakerGainNode).connect(speakerDest);
     sourceNode.connect(micGainNode).connect(micDest);
+
+    // diagnostic level meter — confirms audio is actually arriving from the phone
+    const levelAnalyser = audioCtx.createAnalyser();
+    levelAnalyser.fftSize = 256;
+    sourceNode.connect(levelAnalyser);
+    const levelData = new Uint8Array(levelAnalyser.frequencyBinCount);
+    const levelFill = document.getElementById('pcLevelFill');
+    function tickLevel(){
+      levelAnalyser.getByteFrequencyData(levelData);
+      const avg = levelData.reduce((a,b)=>a+b,0)/levelData.length;
+      levelFill.style.width = Math.min(100, (avg/140)*100) + '%';
+      requestAnimationFrame(tickLevel);
+    }
+    tickLevel();
 
     speakerAudioEl.srcObject = speakerDest.stream;
     micAudioEl.srcObject = micDest.stream;
