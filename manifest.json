@@ -1,0 +1,15 @@
+{
+  "name": "ফোন মাইক্রোফোন ব্রিজ",
+  "short_name": "মাইক ব্রিজ",
+  "description": "ফোনের মাইক্রোফোন দিয়ে PC-তে HD ভয়েস পাঠান — স্পিকারে বাজান বা ভার্চুয়াল মাইক্রোফোন হিসেবে ব্যবহার করুন।",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0c0e",
+  "theme_color": "#0c0c0e",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
