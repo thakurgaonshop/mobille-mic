@@ -128,6 +128,9 @@
 
     <div id="pcStatus" class="status wait"><span class="dot"></span> ফোনের সংযোগের অপেক্ষায়...</div>
 
+    <button class="btn-green" id="enableAudioBtn">🔊 সাউন্ড চালু করুন (এখানে ক্লিক করুন)</button>
+    <div class="note">ব্রাউজারের নিয়ম অনুযায়ী এই বাটনে একবার ক্লিক করা জরুরি — নাহলে ফোন সংযুক্ত হলেও PC-তে কোনো শব্দ শোনা যাবে না। সংযোগ হওয়ার আগে বা পরে, যেকোনো সময় চাপতে পারেন।</div>
+
     <div id="pcControls" style="display:none;">
       <hr class="sep">
       <h3 style="font-size:13px;color:#ffcf7a;margin:0 0 10px;">🔊 স্পিকারে বাজান</h3>
@@ -231,10 +234,31 @@ function initPC(){
   let audioCtx, sourceNode;
   let speakerGainNode, micGainNode;
   let speakerDest, micDest;
+  let audioUnlocked = false;
   const speakerAudioEl = new Audio();
   const micAudioEl = new Audio();
   speakerAudioEl.autoplay = true;
   micAudioEl.autoplay = true;
+
+  const enableBtn = document.getElementById('enableAudioBtn');
+  function ensureAudioCtx(){
+    if(!audioCtx){
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return audioCtx;
+  }
+  enableBtn.addEventListener('click', ()=>{
+    // This click is a real user gesture — browsers require this to allow
+    // audio to actually make sound. Do everything audio-related here.
+    ensureAudioCtx();
+    audioCtx.resume().then(()=>{
+      audioUnlocked = true;
+      enableBtn.textContent = '✅ সাউন্ড চালু হয়েছে';
+      enableBtn.disabled = true;
+    }).catch(err=> console.warn('resume failed:', err));
+    speakerAudioEl.play().catch(err=> console.warn('speaker play blocked:', err));
+    micAudioEl.play().catch(err=> console.warn('mic play blocked:', err));
+  });
 
   peer.on('call', call=>{
     call.answer(); // we don't send audio back, just receive
@@ -244,6 +268,9 @@ function initPC(){
       controlsEl.style.display = 'block';
       setupAudioGraph(remoteStream);
       populateDevices();
+      if(!audioUnlocked){
+        statusEl.innerHTML += '<br>⚠️ উপরের "সাউন্ড চালু করুন" বাটনে ক্লিক করেছেন তো? না করলে শব্দ শোনা যাবে না।';
+      }
     });
     call.on('close', ()=>{
       statusEl.className = 'status wait';
@@ -252,7 +279,8 @@ function initPC(){
   });
 
   function setupAudioGraph(remoteStream){
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    ensureAudioCtx();
+    if(audioCtx.state === 'suspended') audioCtx.resume().catch(()=>{});
     sourceNode = audioCtx.createMediaStreamSource(remoteStream);
 
     speakerGainNode = audioCtx.createGain();
@@ -265,8 +293,8 @@ function initPC(){
 
     speakerAudioEl.srcObject = speakerDest.stream;
     micAudioEl.srcObject = micDest.stream;
-    speakerAudioEl.play().catch(()=>{});
-    micAudioEl.play().catch(()=>{});
+    speakerAudioEl.play().catch(err=> console.warn('speaker play blocked:', err));
+    micAudioEl.play().catch(err=> console.warn('mic play blocked:', err));
 
     applyGains();
     applyEnableStates();
